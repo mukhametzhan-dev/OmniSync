@@ -545,15 +545,12 @@ async def start_agent(request: StartAgentRequest, background_tasks: BackgroundTa
 
 @app.post("/stop_agent/{session_id}")
 async def stop_agent(session_id: str):
-    """Stop a specific agent session"""
     try:
         if session_id not in active_sessions:
             raise HTTPException(status_code=404, detail="Session not found")
         
         agent = active_sessions[session_id]
         await agent.stop()
-        
-        # Remove from active sessions
         del active_sessions[session_id]
         
         logger.info(f"Stopped agent session {session_id}")
