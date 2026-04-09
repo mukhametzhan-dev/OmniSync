@@ -17,6 +17,19 @@ We use **Uber H3** library for hexagonal geospatial indexing:
 
 Example: task gets `h3_hex_id` field like `"891da000000ffff"`
 
+
+## Frontend Implementation
+A responsive web interface for visualizing transcripts, managing tasks, and reviewing geographic meeting distributions.
+
+Light Theme
+<img width="1814" height="969" alt="image" src="https://github.com/user-attachments/assets/af010a9b-8457-4bed-9faa-84c8c83d2a29" />
+
+Dark Theme
+<img width="1781" height="966" alt="image" src="https://github.com/user-attachments/assets/8b2c198c-102e-4c8b-b3d0-5e5998da9873" />
+
+Mobile Version
+<img width="431" height="869" alt="image" src="https://github.com/user-attachments/assets/dd6f05be-170f-4643-a1e8-48c8826d81be" />
+
 ```
 ┌─────────────────────┐    ┌──────────────────────┐    ┌─────────────────────┐
 │   Telegram Bot      │    │   FastAPI Backend    │    │  Selenium Agent     │
@@ -35,13 +48,5 @@ Example: task gets `h3_hex_id` field like `"891da000000ffff"`
                            │   (Сессии/задачи)   │    │   (Извлечение речи) │
                            └──────────────────────┘    └─────────────────────┘
 ```
-Light Theme
-<img width="1814" height="969" alt="image" src="https://github.com/user-attachments/assets/af010a9b-8457-4bed-9faa-84c8c83d2a29" />
-
-Dark Theme
-<img width="1781" height="966" alt="image" src="https://github.com/user-attachments/assets/8b2c198c-102e-4c8b-b3d0-5e5998da9873" />
-
-Mobile Version
-<img width="431" height="869" alt="image" src="https://github.com/user-attachments/assets/dd6f05be-170f-4643-a1e8-48c8826d81be" />
 
 
