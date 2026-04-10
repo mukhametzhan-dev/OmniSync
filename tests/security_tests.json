@@ -1,0 +1,417 @@
+{
+  "info": {
+    "_postman_id": "omnisync-security-tests",
+    "name": "OmniSync Security Tests",
+    "description": "Security testing for OmniSync API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth Bypass",
+      "item": [
+        {
+          "name": "Missing Authorization header",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["sessions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Empty Bearer token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer "
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"meeting_url\": \"https://meet.google.com/test\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/start_agent",
+              "host": ["{{base_url}}"],
+              "path": ["start_agent"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Malformed Authorization",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "NotBearer token"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["sessions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "JWT Attacks",
+      "item": [
+        {
+          "name": "Expired token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjF9.sig"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["sessions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invalid signature",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.badsig"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["sessions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "None algorithm",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiJ9."
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["sessions"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RBAC",
+      "item": [
+        {
+          "name": "Participant /start_agent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{participant_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"meeting_url\": \"https://meet.google.com/test\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/start_agent",
+              "host": ["{{base_url}}"],
+              "path": ["start_agent"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Host /final-transcript",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{host_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"session_id\": \"test\", \"full_raw_transcript\": \"data\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/final-transcript",
+              "host": ["{{base_url}}"],
+              "path": ["final-transcript"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Payload Size",
+      "item": [
+        {
+          "name": "Oversized chunk",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"session_id\": \"test\", \"text_chunk\": \"{{huge_payload}}\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/process-chunk",
+              "host": ["{{base_url}}"],
+              "path": ["process-chunk"]
+            }
+          },
+          "event": [
+            {
+              "listen": "pre-request",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('huge_payload', 'A'.repeat(5000000));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 413 or 422', () => pm.expect([413, 422]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Input Validation",
+      "item": [
+        {
+          "name": "SQL in session_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"session_id\": \"' OR '1'='1\", \"text_chunk\": \"test\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/process-chunk",
+              "host": ["{{base_url}}"],
+              "path": ["process-chunk"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('No 500 error', () => pm.expect(pm.response.code).not.to.equal(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "XSS in text_chunk",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"session_id\": \"test\", \"text_chunk\": \"<script>alert('xss')</script>\"}"
+            },
+            "url": {
+              "raw": "{{base_url}}/process-chunk",
+              "host": ["{{base_url}}"],
+              "path": ["process-chunk"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('No 500 error', () => pm.expect(pm.response.code).not.to.equal(500));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Path traversal",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/session/../../etc/passwd",
+              "host": ["{{base_url}}"],
+              "path": ["api", "session", "../../etc/passwd"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400 or 404', () => pm.expect([400, 404]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8001"
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "host_token",
+      "value": ""
+    },
+    {
+      "key": "participant_token",
+      "value": ""
+    }
+  ]
+}
