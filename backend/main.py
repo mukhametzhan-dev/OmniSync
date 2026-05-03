@@ -545,12 +545,15 @@ async def start_agent(request: StartAgentRequest, background_tasks: BackgroundTa
 
 @app.post("/stop_agent/{session_id}")
 async def stop_agent(session_id: str):
+    """Stop a specific agent session"""
     try:
         if session_id not in active_sessions:
             raise HTTPException(status_code=404, detail="Session not found")
         
         agent = active_sessions[session_id]
         await agent.stop()
+        
+        # Remove from active sessions
         del active_sessions[session_id]
         
         logger.info(f"Stopped agent session {session_id}")
@@ -577,6 +580,118 @@ async def get_agent_status(session_id: str):
         "captions_enabled": agent.captions_enabled,
         "audio_recording": agent.audio_recording
     }
+
+# New transcript processing endpoints
+
+@app.post("/api/transcript/chunk", response_model=ChunkProcessResponse)
+async def process_transcript_chunk(request: ChunkProcessRequest):
+    """
+    Process a 5-minute text chunk in real-time
+    Cleans text with Gemini and analyzes if clarifying questions are needed
+    """
+    try:
+        session_id = request.session_id
+        
+        # Initialize session history if not exists
+        if session_id not in session_history:
+            session_history[session_id] = {
+                'chunks': [],
+                'questions_asked': 0,
+                'participants': set(),
+                'created_at': datetime.now()
+            }
+        
+        session_data = session_history[session_id]
+        
+        # Clean the text with Gemini
+        cleaned_text = await clean_text_with_openrouter(request.text_chunk)
+        
+        # Store the cleaned chunk
+        session_data['chunks'].append({
+            'timestamp': request.timestamp,
+            'original': request.text_chunk,
+            'cleaned': cleaned_text
+        })
+        
+        # Extract participant names (simple heuristic)
+        import re
+        speakers = re.findall(r'(\w+):\s', cleaned_text)
+        session_data['participants'].update(speakers)
+        
+        # Analyze if we need to ask a clarifying question
+        history_texts = [chunk['cleaned'] for chunk in session_data['chunks']]
+        needs_question, question_text = await analyze_context_with_openrouter(
+            cleaned_text, 
+            history_texts, 
+            session_data['questions_asked']
+        )
+        
+        if needs_question and question_text:
+            session_data['questions_asked'] += 1
+            logger.info(f"Session {session_id}: Asking question #{session_data['questions_asked']}: {question_text}")
+            return ChunkProcessResponse(
+                action="ask_question",
+                question_text=question_text,
+                cleaned_text=cleaned_text
+            )
+        else:
+            return ChunkProcessResponse(
+                action="continue",
+                cleaned_text=cleaned_text
+            )
+            
+    except Exception as e:
+        logger.error(f"Error processing chunk for session {request.session_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process chunk: {str(e)}")
+
+@app.post("/api/transcript/final", response_model=FinalTranscriptResponse)
+async def process_final_transcript(request: FinalTranscriptRequest):
+    """
+    Process the final meeting transcript
+    Generates summary and sends Telegram notification
+    """
+    try:
+        session_id = request.session_id
+        
+        # Get session data
+        session_data = session_history.get(session_id, {
+            'chunks': [],
+            'questions_asked': 0,
+            'participants': set(),
+            'created_at': datetime.now()
+        })
+        
+        logger.info(f"Processing final transcript for session {session_id}")
+        
+        # Clean the final transcript
+        cleaned_transcript = await clean_text_with_openrouter(request.full_raw_transcript)
+        
+        # Generate meeting summary
+        summary = await generate_meeting_summary(cleaned_transcript, session_data)
+        
+        # Send Telegram notification
+        telegram_sent = await send_telegram_notification(summary, session_id)
+        
+        # Mark session as completed and clean up
+        if session_id in session_history:
+            session_history[session_id]['status'] = 'completed'
+            session_history[session_id]['completed_at'] = datetime.now()
+        
+        logger.info(f"Final transcript processed for session {session_id}, Telegram sent: {telegram_sent}")
+        
+        return FinalTranscriptResponse(
+            success=True,
+            summary=summary,
+            telegram_sent=telegram_sent,
+            message="Meeting summary generated and notification sent successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing final transcript for session {request.session_id}: {str(e)}")
+        return FinalTranscriptResponse(
+            success=False,
+            message=f"Failed to process final transcript: {str(e)}"
+        )
 
 # Session management endpoints
 
