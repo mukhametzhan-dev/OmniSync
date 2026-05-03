@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  omnisync-api:
+    build: .
+    container_name: omnisync_api
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  omnisync-bot:
+    build: .
+    container_name: omnisync_bot
+    command: python tg_bot.py
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - omnisync-api
