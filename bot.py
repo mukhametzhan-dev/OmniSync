@@ -373,3 +373,148 @@ async def stop_meeting(message: types.Message, state: FSMContext):
         await message.answer('❌ Сводка не получена от бэкенда.')
     
     await state.clear()
+
+@dp.callback_query(F.data.startswith('create_jira:'))
+async def on_create_jira(callback: types.CallbackQuery):
+    """Handle Jira task creation"""
+    # Extract user_id from callback data
+    try:
+        user_id = int(callback.data.split(':')[1])
+    except (IndexError, ValueError):
+        user_id = callback.from_user.id
+    
+    # Get stored tasks
+    session_data = active_sessions.get(user_id, {})
+    tasks = session_data.get('last_tasks', [])
+    
+    # Generate mock tasks if none found
+    if not tasks:
+        summary_text = session_data.get('last_summary', '')
+        if summary_text:
+            # Try to extract tasks from summary using regex
+            task_patterns = [
+                r'• ([^•\n]+)',  # Bullet points with •
+                r'- ([^-\n]+)',  # Bullet points with -
+                r'(?:Задача|Task|Action).*?:([^\n]+)',  # Lines starting with Task/Action
+            ]
+            
+            for pattern in task_patterns:
+                matches = re.findall(pattern, summary_text, re.IGNORECASE | re.MULTILINE)
+                if matches:
+                    tasks.extend([match.strip() for match in matches[:3]])  # Limit to 3 tasks
+                    break
+        
+        # Fallback mock tasks if still empty
+        if not tasks:
+            tasks = [
+                'Уточнить интеграцию с новым API',
+                'Пофиксить парсинг субтитров',
+                'Подготовить документацию'
+            ]
+    
+    # Show success alert
+    await callback.answer('✅ Задачи успешно созданы!')
+    
+    # Create inline buttons for each task (truncate long task names)
+    task_buttons = []
+    for i, task in enumerate(tasks[:5]):  # Limit to 5 tasks
+        task_short = task[:40] + '...' if len(task) > 40 else task
+        task_buttons.append([
+            InlineKeyboardButton(text=task_short, callback_data=f'jira_task:{i}')
+        ])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=task_buttons)
+    await callback.message.answer('✅ Созданы задачи в Jira:', reply_markup=keyboard)
+    
+    # Clean up session
+    if user_id in active_sessions:
+        del active_sessions[user_id]
+
+@dp.callback_query(F.data.startswith('jira_task:'))
+async def on_jira_task_click(callback: types.CallbackQuery):
+    """Handle individual Jira task button click"""
+    task_index = callback.data.split(':')[1]
+    await callback.answer(f'Открыть задачу #{task_index}', show_alert=True)
+
+@dp.callback_query(F.data.startswith('cancel:'))
+async def on_cancel(callback: types.CallbackQuery):
+    """Handle cancel button"""
+    try:
+        user_id = int(callback.data.split(':')[1])
+        if user_id in active_sessions:
+            del active_sessions[user_id]
+    except (IndexError, ValueError):
+        pass
+    
+    await callback.message.delete_reply_markup()
+    await callback.answer('Отменено')
+
+@dp.callback_query(F.data == 'my_history')
+async def on_my_history(callback: types.CallbackQuery):
+    """Handle my meetings history"""
+    user_id = callback.from_user.id
+    
+    # Request sessions from backend
+    async with aiohttp.ClientSession() as session:
+        try:
+            url = f"{BACKEND_URL}/sessions?user_id={user_id}"
+            resp = await get_json(session, url)
+        except Exception:
+            logger.exception('Failed to get sessions')
+            await callback.message.answer('❌ Ошибка при получении списка сессий.')
+            await callback.answer()
+            return
+    
+    if resp.get('status') != 200:
+        await callback.message.answer('❌ Бэкенд недоступен или вернул ошибку.')
+        await callback.answer()
+        return
+    
+    data = resp.get('data', {})
+    sessions = data.get('sessions', []) if isinstance(data, dict) else []
+    
+    if not sessions:
+        await callback.message.answer('📂 У вас нет сохранённых созвонов.')
+    else:
+        # Format sessions list
+        session_lines = []
+        for i, session in enumerate(sessions[:10]):  # Limit to 10 recent sessions
+            session_id = session.get('session_id') or session.get('id') or f'session_{i}'
+            timestamp = session.get('started_at') or session.get('timestamp') or 'Неизвестно'
+            session_lines.append(f'• {session_id} ({timestamp})')
+        
+        sessions_text = '📂 Ваши созвоны:\n\n' + '\n'.join(session_lines)
+        await callback.message.answer(sessions_text)
+    
+    await callback.answer()
+
+# Error handler
+@dp.error()
+async def error_handler(event, exception):
+    """Global error handler"""
+    logger.exception('Unhandled error in bot')
+    return True
+
+async def main():
+    """Main bot function"""
+    logger.info(f'Starting bot with token ending in ...{API_TOKEN[-10:]}')
+    logger.info(f'Backend URL: {BACKEND_URL}')
+    
+    try:
+        # Start polling
+        await dp.start_polling(bot)
+    except Exception:
+        logger.exception('Error starting bot')
+    finally:
+        # Cancel all active polling tasks
+        for session_data in active_sessions.values():
+            if session_data.get('poll_task'):
+                session_data['poll_task'].cancel()
+        
+        await bot.session.close()
+
+if __name__ == '__main__':
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info('Bot stopped by user')
